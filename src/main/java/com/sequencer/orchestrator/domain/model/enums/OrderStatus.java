@@ -1,0 +1,23 @@
+package com.sequencer.orchestrator.domain.model.enums;
+
+public enum OrderStatus {
+    ENROLLED,
+    SLOT_REQUESTED,
+    APHERESIS_SCHEDULED,
+    APHERESIS_COMPLETE,
+    IN_TRANSIT_INBOUND,
+    ACCESSIONED,
+    MANUFACTURING,
+    QC_IN_PROGRESS,
+    QC_HOLD,
+    RELEASED,
+    IN_TRANSIT_OUTBOUND,
+    RECEIVED_AT_CENTER,
+    LYMPHODEPLETION,
+    INFUSION_READY,
+    INFUSED,
+    MONITORING,
+    CLOSED,
+    FAILED,
+    CANCELLED
+}
