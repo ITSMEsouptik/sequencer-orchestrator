@@ -5,17 +5,15 @@ import com.sequencer.orchestrator.domain.model.base.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
 import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
 @Table(name = "patients")
-@EntityListeners(AuditingEntityListener.class)
 @Builder
+@Getter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Patient extends AuditableEntity {
@@ -35,9 +33,9 @@ public class Patient extends AuditableEntity {
     @Column(name = "treatment_center_id", nullable = false, updatable = false)
     private UUID treatmentCenterID;
 
-    @CreatedDate
     @Column(name = "enrollment_date", nullable = false)
-    private LocalDate enrollmentDate;
+    @Builder.Default
+    private LocalDate enrollmentDate = LocalDate.now();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)

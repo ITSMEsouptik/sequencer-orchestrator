@@ -7,6 +7,8 @@ services:
       POSTGRES_PASSWORD: sequencer_orchestrator_pass
     ports:
       - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sequencer_orchestrator_user -d sequencer-orchestrator"]
       interval: 5s
@@ -21,3 +23,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+volumes:
+  pg_data:
