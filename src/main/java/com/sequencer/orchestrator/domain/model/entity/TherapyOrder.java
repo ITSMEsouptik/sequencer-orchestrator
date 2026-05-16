@@ -44,4 +44,8 @@ public class TherapyOrder extends AuditableEntity {
 
     @Column(name = "failure_reason")
     private String failureReason;
+
+    public void advanceTo(OrderStatus next) {
+        this.status = next;
+    }
 }

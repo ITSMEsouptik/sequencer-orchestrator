@@ -85,6 +85,66 @@ Migrations live in `src/main/resources/db/migration/`.
 | V7 | `outbox_events` table (JSONB payload) |
 | V8 | `processed_events` table (idempotency) |
 
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/patients` | Enroll a new patient |
+| `POST` | `/api/orders` | Create a therapy order for a patient |
+| `GET` | `/api/orders` | List all orders (optional `?status=` filter) |
+| `GET` | `/api/orders/{id}` | Get full order detail by ID |
+
+### Sample — Enroll a patient
+
+```json
+POST /api/patients
+{
+  "name": "Alex",
+  "dateOfBirth": "1998-05-30",
+  "diagnosisCode": "C91.1",
+  "hcpID": "550e8400-e29b-41d4-a716-446655440000",
+  "treatmentCenterID": "7f3b2c1a-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
+}
+```
+
+### Sample — Create an order
+
+```json
+POST /api/orders
+{
+  "patientId": "<patient-uuid>",
+  "hcpID": "550e8400-e29b-41d4-a716-446655440000",
+  "treatmentCenterID": "7f3b2c1a-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
+}
+```
+
+## Polling Orchestrator
+
+A background job runs every 5 seconds and advances all active therapy orders through the clinical state machine:
+
+```
+ENROLLED → SLOT_REQUESTED → APHERESIS_SCHEDULED → APHERESIS_COMPLETE
+→ IN_TRANSIT_INBOUND → ACCESSIONED → MANUFACTURING → QC_IN_PROGRESS
+→ RELEASED → IN_TRANSIT_OUTBOUND → RECEIVED_AT_CENTER → LYMPHODEPLETION
+→ INFUSION_READY → INFUSED → MONITORING → CLOSED
+```
+
+Terminal states (`CLOSED`, `FAILED`, `CANCELLED`) are excluded from polling. Each transition is logged with the order ID, from status, and to status. Exceptions per order are caught and logged — one failing order does not block others.
+
+## Build Status
+
+| Phase | Step | Status |
+|-------|------|--------|
+| Phase 1 | 1.1 — Database schema (Flyway migrations) | Complete |
+| Phase 1 | 1.2 — JPA entities and repositories | Complete |
+| Phase 1 | 1.3 — REST API | Complete |
+| Phase 1 | 1.4 — Polling orchestrator | Complete |
+| Phase 1 | 1.5 — Angular polling dashboard | Pending |
+| Phase 2 | SQS/SNS event-driven | Pending |
+| Phase 3 | Kafka consumer group | Pending |
+| Phase 4 | AWS Lambda vendor layer | Pending |
+| Phase 5 | Angular complete dashboard | Pending |
+
 ## Project Structure
 
 ```
@@ -96,7 +156,8 @@ src/main/java/com/sequencer/orchestrator/
 │   │   └── enums/       — OrderStatus, PatientStatus, EventType, AggregateType
 │   └── repository/      — Spring Data JPA repositories
 ├── api/
-│   ├── controller/      — REST controllers
-│   └── dto/             — Request and response DTOs
-└── service/             — Business logic
+│   ├── controller/      — REST controllers (PatientController, OrderController)
+│   ├── dto/             — Request and response DTOs
+│   └── exception/       — GlobalExceptionHandler
+└── service/             — Business logic + polling orchestrator
 ```
