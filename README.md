@@ -8,12 +8,12 @@ CAR-T cell therapy requires extracting a patient's T-cells (apheresis), engineer
 
 ## Architecture
 
-- **Spring Boot 3.2 (Java 21)** — backend orchestration engine
-- **Angular 17** — real-time dashboard
+- **Spring Boot 3.5 (Java 21)** — backend orchestration engine
+- **Angular 17** — real-time polling dashboard (Angular Material, Signals)
 - **PostgreSQL 15** — primary datastore with Flyway schema management
-- **Redis 7** — idempotency and caching
-- **AWS SQS/SNS via LocalStack** — event fan-out and messaging
-- **Apache Kafka** — event streaming and replay
+- **Redis 7** — idempotency and caching (configured, Phase 2+)
+- **AWS SQS/SNS via LocalStack** — event fan-out and messaging (Phase 2+)
+- **Apache Kafka** — event streaming and replay (Phase 3+)
 
 ## Patient Journey (11 Stages)
 
@@ -42,7 +42,7 @@ CAR-T cell therapy requires extracting a patient's T-cells (apheresis), engineer
 - Java 21
 - Maven 3.9+
 - Docker and Docker Compose
-- Node.js 18+ (for frontend, Phase 5 only)
+- Node.js 18+
 
 ## Running Locally
 
@@ -66,8 +66,19 @@ mvn spring-boot:run
 
 Flyway will automatically apply all migrations on first startup.
 
-### 3. Verify
+### 3. Run the frontend
 
+```bash
+cd frontend
+npm install
+npm start
+```
+
+The Angular dev server proxies `/api` to `localhost:8080`, so CORS is not needed locally.
+
+### 4. Verify
+
+- Frontend: http://localhost:4200
 - API: http://localhost:8080
 - PostgreSQL: `localhost:5432` / DB: `sequencer-orchestrator`
 - Redis: `localhost:6379`
@@ -131,6 +142,25 @@ ENROLLED → SLOT_REQUESTED → APHERESIS_SCHEDULED → APHERESIS_COMPLETE
 
 Terminal states (`CLOSED`, `FAILED`, `CANCELLED`) are excluded from polling. Each transition is logged with the order ID, from status, and to status. Exceptions per order are caught and logged — one failing order does not block others.
 
+## Angular Dashboard
+
+The dashboard polls `GET /api/orders` every 5 seconds using RxJS `interval` + `switchMap`. It uses Angular 17 standalone components with Angular Material and Signals.
+
+**Features:**
+- Live order table: order ID, patient name, status chip, days since creation, last updated
+- Active order count via `computed()` signal (excludes `CLOSED`, `FAILED`, `CANCELLED`)
+- Automatic cleanup of subscriptions on component destroy
+
+**Key files:**
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/app/features/dashboard/dashboard.ts` | Main component — polling, signals, Material table |
+| `frontend/src/app/services/order.service.ts` | `getOrders(status?)` → `Observable<Order[]>` |
+| `frontend/src/app/interfaces/Order.ts` | Order response shape |
+| `frontend/src/app/enum/OrderStatus.ts` | 19 status values mirroring the backend enum |
+| `frontend/proxy.conf.json` | Dev proxy: `/api` → `localhost:8080` |
+
 ## Build Status
 
 | Phase | Step | Status |
@@ -139,11 +169,11 @@ Terminal states (`CLOSED`, `FAILED`, `CANCELLED`) are excluded from polling. Eac
 | Phase 1 | 1.2 — JPA entities and repositories | Complete |
 | Phase 1 | 1.3 — REST API | Complete |
 | Phase 1 | 1.4 — Polling orchestrator | Complete |
-| Phase 1 | 1.5 — Angular polling dashboard | Pending |
+| Phase 1 | 1.5 — Angular polling dashboard | Complete |
 | Phase 2 | SQS/SNS event-driven | Pending |
 | Phase 3 | Kafka consumer group | Pending |
 | Phase 4 | AWS Lambda vendor layer | Pending |
-| Phase 5 | Angular complete dashboard | Pending |
+| Phase 5 | Angular complete dashboard (SSE, Kanban) | Pending |
 
 ## Project Structure
 

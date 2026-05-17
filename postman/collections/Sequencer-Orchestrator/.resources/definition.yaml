@@ -1,0 +1,14 @@
+$kind: collection
+name: Sequencer Orchestrator API
+description: API collection for the Sequencer Orchestrator — a CAR-T cell therapy orchestration engine managing the complete vein-to-vein patient journey.
+variables:
+  - key: baseUrl
+    value: 'http://localhost:8080'
+  - key: hcpId
+    value: ''
+  - key: treatmentCenterId
+    value: ''
+  - key: patientId
+    value: ''
+  - key: orderId
+    value: ''

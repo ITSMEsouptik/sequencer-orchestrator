@@ -1,0 +1,6 @@
+$kind: http-request
+name: Get Order by ID
+method: GET
+url: '{{baseUrl}}/api/orders/{{orderId}}'
+order: 3000
+description: Retrieves a specific therapy order by its UUID

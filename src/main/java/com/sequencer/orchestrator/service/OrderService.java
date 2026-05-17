@@ -28,7 +28,7 @@ public class OrderService {
     }
 
     @Transactional
-    public TherapyOrder createOrder(CreateOrderRequest request) {
+    public OrderSummaryResponse createOrder(CreateOrderRequest request) {
         Optional<Patient> patient = patientRepository.findById(request.getPatientId());
 
         if(patient.isEmpty()) {
@@ -42,7 +42,14 @@ public class OrderService {
                 .build();
 
         therapyOrderRepository.save(order);
-        return order;
+        OrderSummaryResponse response = new OrderSummaryResponse(
+                order.getId(),
+                order.getPatient().getName(),
+                order.getStatus(),
+                order.getCreatedAt(),
+                order.getUpdatedAt()
+        );
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -67,11 +74,18 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public TherapyOrder getOrderByID(UUID id) {
+    public OrderSummaryResponse getOrderByID(UUID id) {
         Optional<TherapyOrder> order = therapyOrderRepository.findById(id);
         if(order.isEmpty()) {
             throw new IllegalArgumentException("Order Not Found");
         }
-        return order.get();
+        OrderSummaryResponse response = OrderSummaryResponse.builder()
+        .orderId(order.get().getId())
+        .patientName(order.get().getPatient().getName())
+        .status(order.get().getStatus())
+        .createdAt(order.get().getCreatedAt())
+        .updatedAt(order.get().getUpdatedAt())
+        .build();
+        return response;
     }
 }

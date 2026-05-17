@@ -1,0 +1,11 @@
+$kind: http-request
+name: Get All Orders
+method: GET
+url: '{{baseUrl}}/api/orders'
+order: 2000
+description: Retrieves all therapy orders, optionally filtered by status
+queryParams:
+  - key: status
+    value: ''
+    description: 'Filter by order status (e.g. ENROLLED, MANUFACTURING, SHIPPED, etc.)'
+    disabled: true

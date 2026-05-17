@@ -1,0 +1,22 @@
+name: Sequencer Orchestrator - Local
+values:
+  - key: baseUrl
+    value: 'http://localhost:8080'
+    enabled: true
+    type: default
+  - key: patientId
+    value: ''
+    enabled: true
+    type: default
+  - key: orderId
+    value: ''
+    enabled: true
+    type: default
+  - key: hcpId
+    value: '00000000-0000-0000-0000-000000000001'
+    enabled: true
+    type: default
+  - key: treatmentCenterId
+    value: '00000000-0000-0000-0000-000000000002'
+    enabled: true
+    type: default

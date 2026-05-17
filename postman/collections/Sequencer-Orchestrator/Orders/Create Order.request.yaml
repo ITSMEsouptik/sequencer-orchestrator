@@ -1,0 +1,17 @@
+$kind: http-request
+name: Create Order
+method: POST
+url: '{{baseUrl}}/api/orders'
+order: 1000
+description: Places a new therapy order (Intent to Treat) for a patient
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "patientId": "{{patientId}}",
+      "hcpID": "{{hcpId}}",
+      "treatmentCenterID": "{{treatmentCenterId}}"
+    }

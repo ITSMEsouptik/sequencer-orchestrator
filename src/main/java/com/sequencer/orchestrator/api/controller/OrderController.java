@@ -24,12 +24,12 @@ public class OrderController {
     }
 
     @PostMapping
-    public ResponseEntity<TherapyOrder> createOrder(
+    public ResponseEntity<OrderSummaryResponse> createOrder(
             @RequestBody
             @Valid
             CreateOrderRequest request
     ){
-        TherapyOrder order = orderService.createOrder(request);
+        OrderSummaryResponse order = orderService.createOrder(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(order);
     }
@@ -44,10 +44,10 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TherapyOrder> getOrder(
+    public ResponseEntity<OrderSummaryResponse> getOrder(
             @PathVariable UUID id
             ) {
-        TherapyOrder order = orderService.getOrderByID(id);
+        OrderSummaryResponse order = orderService.getOrderByID(id);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(order);
     }
