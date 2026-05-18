@@ -1,6 +1,7 @@
 package com.sequencer.orchestrator.api.controller;
 
 import com.sequencer.orchestrator.api.dto.CreateOrderRequest;
+import com.sequencer.orchestrator.api.dto.OrderStatusHistoryResponse;
 import com.sequencer.orchestrator.api.dto.OrderSummaryResponse;
 import com.sequencer.orchestrator.domain.model.entity.TherapyOrder;
 import com.sequencer.orchestrator.domain.model.enums.OrderStatus;
@@ -50,5 +51,14 @@ public class OrderController {
         OrderSummaryResponse order = orderService.getOrderByID(id);
         return ResponseEntity.status(HttpStatus.OK)
                 .body(order);
+    }
+
+    @GetMapping("/{id}/history")
+    public ResponseEntity<List<OrderStatusHistoryResponse>> getHistory(
+        @PathVariable UUID id
+    ){
+        List<OrderStatusHistoryResponse> history = orderService.getStatusHistory(id);
+        return ResponseEntity.status(HttpStatus.OK)
+        .body(history);
     }
 }

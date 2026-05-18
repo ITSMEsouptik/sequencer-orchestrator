@@ -9,25 +9,22 @@ CAR-T cell therapy requires extracting a patient's T-cells (apheresis), engineer
 ## Architecture
 
 - **Spring Boot 3.5 (Java 21)** — backend orchestration engine
-- **Angular 17** — real-time polling dashboard (Angular Material, Signals)
+- **Angular 19** — real-time polling dashboard (Angular Material, Signals)
 - **PostgreSQL 15** — primary datastore with Flyway schema management
 - **Redis 7** — idempotency and caching (configured, Phase 2+)
 - **AWS SQS/SNS via LocalStack** — event fan-out and messaging (Phase 2+)
 - **Apache Kafka** — event streaming and replay (Phase 3+)
 
-## Patient Journey (11 Stages)
+## Patient Journey (19 Statuses)
 
-1. **HCP Enrollment** — healthcare provider and site are credentialed and registered
-2. **Patient Registration** — patient identity and insurance are verified and entered
-3. **Apheresis Scheduling** — leukapheresis appointment is scheduled at a certified collection site
-4. **Cell Collection** — T-cells are collected and the apheresis bag is assigned a chain-of-custody ID
-5. **Manufacturing Release** — the collection is shipped to the manufacturing site and accepted
-6. **Manufacturing in Progress** — T-cells are engineered and expanded under GMP conditions
-7. **QC Testing** — product undergoes potency, sterility, and identity release testing
-8. **Product Release** — QC passes and the lot is released for patient use
-9. **Cold-Chain Shipping** — cryopreserved product ships to the infusion site with temperature monitoring
-10. **Infusion Scheduling** — infusion slot is confirmed at the treating institution
-11. **Post-Infusion Monitoring** — patient is monitored for CRS/ICANS and long-term response
+```
+ENROLLED → SLOT_REQUESTED → APHERESIS_SCHEDULED → APHERESIS_COMPLETE
+→ IN_TRANSIT_INBOUND → ACCESSIONED → MANUFACTURING → QC_IN_PROGRESS
+→ RELEASED → IN_TRANSIT_OUTBOUND → RECEIVED_AT_CENTER → LYMPHODEPLETION
+→ INFUSION_READY → INFUSED → MONITORING → CLOSED
+```
+
+Terminal states: `CLOSED`, `FAILED`, `CANCELLED`
 
 ## Build Phases
 
@@ -52,16 +49,10 @@ CAR-T cell therapy requires extracting a patient's T-cells (apheresis), engineer
 docker-compose up -d
 ```
 
-Wait for all services to be healthy:
-
-```bash
-docker-compose ps
-```
-
 ### 2. Run the backend
 
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
 Flyway will automatically apply all migrations on first startup.
@@ -76,7 +67,15 @@ npm start
 
 The Angular dev server proxies `/api` to `localhost:8080`, so CORS is not needed locally.
 
-### 4. Verify
+### 4. Run a second backend instance (for race condition testing)
+
+```bash
+java -jar target/sequencer-orchestrator-*.jar --server.port=8081
+```
+
+Both instances will poll the same database concurrently, exposing the locking gap described in Observations below.
+
+### 5. Verify
 
 - Frontend: http://localhost:4200
 - API: http://localhost:8080
@@ -95,6 +94,7 @@ Migrations live in `src/main/resources/db/migration/`.
 | V2 | `therapy_orders` table |
 | V7 | `outbox_events` table (JSONB payload) |
 | V8 | `processed_events` table (idempotency) |
+| V9 | `order_status_history` table |
 
 ## API Endpoints
 
@@ -104,6 +104,7 @@ Migrations live in `src/main/resources/db/migration/`.
 | `POST` | `/api/orders` | Create a therapy order for a patient |
 | `GET` | `/api/orders` | List all orders (optional `?status=` filter) |
 | `GET` | `/api/orders/{id}` | Get full order detail by ID |
+| `GET` | `/api/orders/{id}/history` | Get full status transition history for an order |
 
 ### Sample — Enroll a patient
 
@@ -131,46 +132,92 @@ POST /api/orders
 
 ## Polling Orchestrator
 
-A background job runs every 5 seconds and advances all active therapy orders through the clinical state machine:
+A background job (`@Scheduled(fixedDelay = 5000)`) runs every 5 seconds and advances all active therapy orders through the clinical state machine. Terminal states (`CLOSED`, `FAILED`, `CANCELLED`) are excluded. Each transition is logged with the order ID, from-status, and to-status. Exceptions per order are caught and logged — one failing order does not block others.
 
-```
-ENROLLED → SLOT_REQUESTED → APHERESIS_SCHEDULED → APHERESIS_COMPLETE
-→ IN_TRANSIT_INBOUND → ACCESSIONED → MANUFACTURING → QC_IN_PROGRESS
-→ RELEASED → IN_TRANSIT_OUTBOUND → RECEIVED_AT_CENTER → LYMPHODEPLETION
-→ INFUSION_READY → INFUSED → MONITORING → CLOSED
-```
-
-Terminal states (`CLOSED`, `FAILED`, `CANCELLED`) are excluded from polling. Each transition is logged with the order ID, from status, and to status. Exceptions per order are caught and logged — one failing order does not block others.
+Every transition (including the initial `ENROLLED` written on order creation) is recorded in `order_status_history`.
 
 ## Angular Dashboard
 
-The dashboard polls `GET /api/orders` every 5 seconds using RxJS `interval` + `switchMap`. It uses Angular 17 standalone components with Angular Material and Signals.
+The dashboard polls `GET /api/orders` every 5 seconds using RxJS `interval` + `switchMap`. It uses Angular 19 standalone components with Angular Material and Signals.
 
 **Features:**
-- Live order table: order ID, patient name, status chip, days since creation, last updated
+- Live order table: order ID, patient name, status (colour-coded), days since creation, last updated
 - Active order count via `computed()` signal (excludes `CLOSED`, `FAILED`, `CANCELLED`)
-- Automatic cleanup of subscriptions on component destroy
+- Click any row to open a **Material Dialog** showing the full status transition history for that order — from-status, to-status, and timestamp for every step
+- Automatic cleanup of polling subscriptions on component destroy
 
 **Key files:**
 
 | File | Purpose |
 |------|---------|
-| `frontend/src/app/features/dashboard/dashboard.ts` | Main component — polling, signals, Material table |
-| `frontend/src/app/services/order.service.ts` | `getOrders(status?)` → `Observable<Order[]>` |
+| `frontend/src/app/features/dashboard/dashboard.ts` | Main component — polling, signals, row click → dialog |
+| `frontend/src/app/features/dashboard/order-history-dialog.ts` | Standalone dialog component for status history |
+| `frontend/src/app/services/order.service.ts` | `getOrders()`, `getStatusHistory(orderId)` |
 | `frontend/src/app/interfaces/Order.ts` | Order response shape |
+| `frontend/src/app/interfaces/OrderStatusHistory.ts` | History entry shape |
 | `frontend/src/app/enum/OrderStatus.ts` | 19 status values mirroring the backend enum |
 | `frontend/proxy.conf.json` | Dev proxy: `/api` → `localhost:8080` |
+
+## Observations — Phase 1 Failure Modes
+
+These are intentional gaps in the Phase 1 design, studied by running the system under realistic conditions before applying fixes in Phase 2+.
+
+### Observation 1 — Race Condition (No Locking) ✓ Observed
+
+**What it exposes:** The poller has no locking. If two instances run simultaneously, both can read the same order within the same 5-second tick and advance it twice.
+
+**How to trigger:**
+1. Run a primary instance on port 8080 (`./mvnw spring-boot:run`)
+2. Build the JAR and run a second instance on port 8081 (`java -jar target/*.jar --server.port=8081`)
+3. Create a few orders via the API
+4. Watch the `order_status_history` table — both pollers will write history entries for the same order within the same tick
+
+**What to look for:**
+- Orders that skip a status (e.g. jump from `ENROLLED` directly to `APHERESIS_SCHEDULED`)
+- Two history rows for the same order with `changed_at` values milliseconds apart
+- `updated_at` on the order changing twice within a single 5-second window
+
+**Confirmed on order `a2f5c114-84ec-4a6c-895f-33f303a28e57`:** consecutive status transitions appeared within 2–3 seconds — well under the 5-second polling interval — confirming both instances picked up the same order in the same tick and each wrote a history entry independently.
+
+**Root cause:** No `SELECT ... FOR UPDATE` or `@Version` optimistic lock. Both instances read the same row, both call `advanceTo()`, and both `save()` — last write wins on the order row, but both writes land in the history table, making the double-advance visible.
+
+**Fix (Phase 2):** Pessimistic row-level locking (`SELECT ... FOR UPDATE SKIP LOCKED`) or `@Version`-based optimistic locking with retry.
+
+---
+
+### Observation 2 — Status History Gap (Now Fixed in Phase 1.6)
+
+**What it exposed:** Before V9, `therapy_orders` only stored the current status. If a race condition advanced an order twice, there was no record of the skipped state — only the final status and the last `updated_at` were visible, making the race condition invisible after the fact.
+
+**Fix applied:** `order_status_history` table (V9 migration). Every transition — including the initial `ENROLLED` on order creation — is written as an immutable row with `from_status`, `to_status`, and `changed_at`. The race condition in Observation 1 now leaves a visible fingerprint: two rows for the same order with timestamps milliseconds apart. The history is surfaced in the dashboard via a Material Dialog on row click.
+
+---
+
+### Observation 3 — Thundering Herd
+
+**What it exposes:** Both instances query `findByStatusNotIn(CANCELLED, CLOSED, FAILED)` with no pagination — every poll loads every active order into memory. As order volume grows, each tick becomes a full table scan, and two instances double that load.
+
+**Fix (Phase 2):** Outbox pattern + SQS. Orders are pushed into a queue on state change; each consumer only processes what's assigned to it.
+
+---
+
+### Observation 4 — No Idempotency Guard
+
+**What it exposes:** If the poller crashes mid-tick after saving the order but before completing, the same transition can be retried without detection. The `processed_events` table exists but is not wired into the polling path.
+
+**Fix (Phase 2):** Idempotency keys (stored in `processed_events`) checked before processing each event; the outbox guarantees at-least-once delivery and the idempotency key collapses duplicates to exactly-once.
 
 ## Build Status
 
 | Phase | Step | Status |
 |-------|------|--------|
-| Phase 1 | 1.1 — Database schema (Flyway migrations) | Complete |
+| Phase 1 | 1.1 — Database schema (Flyway V1, V2, V7, V8) | Complete |
 | Phase 1 | 1.2 — JPA entities and repositories | Complete |
-| Phase 1 | 1.3 — REST API | Complete |
+| Phase 1 | 1.3 — REST API (patients, orders) | Complete |
 | Phase 1 | 1.4 — Polling orchestrator | Complete |
 | Phase 1 | 1.5 — Angular polling dashboard | Complete |
-| Phase 2 | SQS/SNS event-driven | Pending |
+| Phase 1 | 1.6 — Status history (V9 migration, entity, endpoint, dialog) | Complete |
+| Phase 2 | SQS/SNS event-driven + locking + idempotency | Pending |
 | Phase 3 | Kafka consumer group | Pending |
 | Phase 4 | AWS Lambda vendor layer | Pending |
 | Phase 5 | Angular complete dashboard (SSE, Kanban) | Pending |
@@ -182,12 +229,31 @@ src/main/java/com/sequencer/orchestrator/
 ├── domain/
 │   ├── model/
 │   │   ├── base/        — BaseEntity, AuditableEntity
-│   │   ├── entity/      — Patient, TherapyOrder, OutboxEvent, ProcessedEvent
+│   │   ├── entity/      — Patient, TherapyOrder, OutboxEvent, ProcessedEvent, OrderStatusHistory
 │   │   └── enums/       — OrderStatus, PatientStatus, EventType, AggregateType
 │   └── repository/      — Spring Data JPA repositories
 ├── api/
-│   ├── controller/      — REST controllers (PatientController, OrderController)
-│   ├── dto/             — Request and response DTOs
+│   ├── controller/      — OrderController, PatientController
+│   ├── dto/             — Request/response DTOs (incl. OrderStatusHistoryResponse)
 │   └── exception/       — GlobalExceptionHandler
-└── service/             — Business logic + polling orchestrator
+└── service/             — OrderService, PatientService, OrderPollingOrchestrator
+
+src/main/resources/db/migration/
+├── V1__create_patients.sql
+├── V2__create_therapy_orders.sql
+├── V7__create_outbox_events.sql
+├── V8__create_processed_events.sql
+└── V9__create_order_status_history.sql
+
+frontend/src/app/
+├── features/dashboard/
+│   ├── dashboard.ts              — main component
+│   ├── dashboard.html            — Material table + row click
+│   ├── dashboard.css
+│   └── order-history-dialog.ts  — history popup dialog
+├── services/order.service.ts
+├── interfaces/
+│   ├── Order.ts
+│   └── OrderStatusHistory.ts
+└── enum/OrderStatus.ts
 ```

@@ -5,6 +5,8 @@ import { OrderService } from '../../services/order.service';
 import { interval, Subscription, switchMap, startWith } from 'rxjs';
 import { MatTableModule } from '@angular/material/table';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatDialog } from '@angular/material/dialog';
+import { OrderHistoryDialogComponent } from './order-history-dialog';
 @Component({
   selector: 'app-dashboard',
   imports: [MatTableModule, MatChipsModule],
@@ -16,8 +18,8 @@ export class Dashboard implements OnInit, OnDestroy {
   private subscription!: Subscription
   constructor(
     private orderService: OrderService,
-  ) {
-  }
+    private dialog: MatDialog,
+  ) {}
 
   ngOnInit(): void {
     this.subscription = interval(5000).pipe(
@@ -64,5 +66,25 @@ export class Dashboard implements OnInit, OnDestroy {
     } else {
       return 'Just now';
     }
+  }
+
+  statusColor(status: OrderStatus) : string {
+    const colorMap = {
+      "CLOSED": 'green',
+      "FAILED": 'red',
+      "MANUFACTURING" : 'blue'
+    }
+    
+    const color = colorMap[OrderStatus[status] as keyof typeof colorMap] || 'yellow';
+    return color;
+  }
+
+  onRowClick(order: Order): void {
+    this.orderService.getStatusHistory(order.orderId).subscribe(history => {
+      this.dialog.open(OrderHistoryDialogComponent, {
+        width: '600px',
+        data: { orderId: order.orderId, history },
+      });
+    });
   }
 }
