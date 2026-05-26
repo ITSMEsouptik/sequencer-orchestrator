@@ -31,7 +31,7 @@ public class TherapyOrder extends AuditableEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
     @Builder.Default
-    private OrderStatus status = OrderStatus.ENROLLED;
+    private OrderStatus status = OrderStatus.SLOT_REQUESTED;
 
     @Column(name = "manufacturing_slot_date")
     private LocalDate manufacturingSlotDate;

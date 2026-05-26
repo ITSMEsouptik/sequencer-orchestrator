@@ -2,11 +2,13 @@ import { Component, computed, signal, OnDestroy, OnInit } from '@angular/core';
 import { Order } from '../../interfaces/Order';
 import { OrderStatus } from '../../enum/OrderStatus';
 import { OrderService } from '../../services/order.service';
-import { interval, Subscription, switchMap, startWith } from 'rxjs';
+import { Subscription } from 'rxjs';
+import { retry } from 'rxjs/operators';
 import { MatTableModule } from '@angular/material/table';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { OrderHistoryDialogComponent } from './order-history-dialog';
+import { OrderStreamService } from '../../services/order-stream.service';
 @Component({
   selector: 'app-dashboard',
   imports: [MatTableModule, MatChipsModule],
@@ -18,14 +20,24 @@ export class Dashboard implements OnInit, OnDestroy {
   private subscription!: Subscription
   constructor(
     private orderService: OrderService,
+    private orderStreamService: OrderStreamService,
     private dialog: MatDialog,
-  ) {}
+  ) { }
 
   ngOnInit(): void {
-    this.subscription = interval(5000).pipe(
-      startWith(0),
-      switchMap(() => this.orderService.getOrders())
-    ).subscribe(orders => this.orders.set(orders))
+    // seed the table on startup
+    this.orderService.getOrders().subscribe(orders => this.orders.set(orders))
+
+    this.subscription = this.orderStreamService.stream()
+      .pipe(retry({ delay: 3000 }))
+      .subscribe(order => this.orders.update(orders => {
+        const index = orders.findIndex(o => o.orderId === order.orderId);
+        if (index > -1) {
+          orders[index] = order;
+          return [...orders];
+        }
+        return [...orders, order];
+      }));
   }
 
   ngOnDestroy(): void {
@@ -39,9 +51,9 @@ export class Dashboard implements OnInit, OnDestroy {
       const excludedStatuses = [OrderStatus.CLOSED, OrderStatus.FAILED, OrderStatus.CANCELLED];
       return !excludedStatuses.includes(order.status);
     }).length);
-  
+
   displayedColumns = ['orderId', 'patientName', 'status', 'daysSinceCreation', 'lastUpdated'];
-  
+
   daysSinceCreation(createdAt: Date): number {
     const now = new Date();
     const createdDate = new Date(createdAt);
@@ -68,16 +80,18 @@ export class Dashboard implements OnInit, OnDestroy {
     }
   }
 
-  statusColor(status: OrderStatus) : string {
-    const colorMap = {
-      "CLOSED": 'green',
-      "FAILED": 'red',
-      "MANUFACTURING" : 'blue'
-    }
-    
-    const color = colorMap[OrderStatus[status] as keyof typeof colorMap] || 'yellow';
-    return color;
+  statusColor(status: OrderStatus): string {
+    const amberStatuses = [
+      OrderStatus.IN_TRANSIT_INBOUND, OrderStatus.IN_TRANSIT_OUTBOUND,
+      OrderStatus.QC_IN_PROGRESS, OrderStatus.QC_HOLD
+    ];
+    if (status === OrderStatus.CLOSED) return 'green';
+    if (status === OrderStatus.FAILED || status === OrderStatus.CANCELLED) return 'red';
+    if (status === OrderStatus.MANUFACTURING) return 'blue';
+    if (amberStatuses.includes(status)) return '#ffc107';
+    return '';
   }
+
 
   onRowClick(order: Order): void {
     this.orderService.getStatusHistory(order.orderId).subscribe(history => {

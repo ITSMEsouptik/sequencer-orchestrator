@@ -7,6 +7,7 @@ import com.sequencer.orchestrator.domain.repository.OrderStatusHistoryRepository
 import com.sequencer.orchestrator.domain.repository.TherapyOrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Component
+@ConditionalOnProperty(name = "sequencer.polling.enabled", havingValue = "true", matchIfMissing = false)
 public class OrderPollingOrchestrator {
     private static final Logger log = LoggerFactory.getLogger(OrderPollingOrchestrator.class);
     private final TherapyOrderRepository therapyOrderRepository;

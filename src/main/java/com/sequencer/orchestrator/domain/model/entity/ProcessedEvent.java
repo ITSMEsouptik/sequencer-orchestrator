@@ -1,13 +1,19 @@
 package com.sequencer.orchestrator.domain.model.entity;
 
 import jakarta.persistence.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "processed_events")
+@Getter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class ProcessedEvent {
     @Id
     @Column(name = "event_id")

@@ -24,4 +24,15 @@ services:
       timeout: 3s
       retries: 5
 
+  localstack:
+    image: localstack/localstack:3.8
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs,sns
+      - DEFAULT_REGION=us-east-1
+    volumes:
+      - /Volumes/Crucial X6/docker/volumes/localstack:/var/lib/localstack
+      - ./localstack-init:/etc/localstack/init
+
 # volumes: block removed — no longer needed

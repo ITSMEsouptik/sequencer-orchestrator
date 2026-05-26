@@ -7,6 +7,7 @@ import com.sequencer.orchestrator.domain.model.base.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -20,6 +21,7 @@ import java.util.UUID;
 @Table(name = "outbox_events")
 @EntityListeners(AuditingEntityListener.class)
 @Builder
+@Getter
 @NoArgsConstructor
 @AllArgsConstructor
 public class OutboxEvent extends BaseEntity {
@@ -48,4 +50,9 @@ public class OutboxEvent extends BaseEntity {
 
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
+
+    public void setPublished() {
+        published = true;
+        publishedAt = OffsetDateTime.now();
+    }
 }
