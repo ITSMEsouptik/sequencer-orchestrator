@@ -32,3 +32,12 @@ build/
 ### VS Code ###
 .vscode/
 .DS_Store
+
+## TERRAFORM ##
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.*.log
+crash.log
+*.tfvars
+*.tfvars.json
