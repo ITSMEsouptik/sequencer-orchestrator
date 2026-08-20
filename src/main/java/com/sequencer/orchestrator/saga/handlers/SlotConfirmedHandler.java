@@ -16,6 +16,6 @@ public class SlotConfirmedHandler implements SagaStepHandler {
     }
 
     public SagaResult handle(SequencerEvent event, TherapyOrder order) {
-        return SagaResult.success(OrderStatus.APHERESIS_SCHEDULED, null);
-    } 
+        return SagaResult.success(OrderStatus.APHERESIS_SCHEDULED, EventType.APHERESIS_SCHEDULED);
+    }
 }

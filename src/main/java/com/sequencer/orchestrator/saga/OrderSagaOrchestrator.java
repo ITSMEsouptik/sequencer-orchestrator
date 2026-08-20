@@ -52,7 +52,9 @@ public class OrderSagaOrchestrator {
 
         SagaStepHandler handler = handlers.get(event.getEventType());
         if (handler == null) {
-            log.error("Handler is unknown");
+            // Expected for events the orchestrator emits (self-echo on the unfiltered inbound queue).
+            // Not an error — just no inbound action for this event type.
+            log.debug("No handler for eventType {}; skipping", event.getEventType());
             return;
         }
 

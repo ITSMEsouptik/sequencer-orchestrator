@@ -5,6 +5,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,7 +41,12 @@ public class OutboxProcessorService {
         for (OutboxEvent event : events) {
             try {
                 SequencerEvent sequencerEvent = toSequencerEvent(event);
-                snsTemplate.sendNotification(topicArn, sequencerEvent, null);
+                // eventType header is required: SNS filter policies inspect message attributes,
+                // not the message body. Omitting it causes silent message loss on vendor queues.
+                snsTemplate.send(topicArn,
+                        MessageBuilder.withPayload(sequencerEvent)
+                                .setHeader("eventType", event.getEventType().name())
+                                .build());
                 log.info("Published event {} for aggregate {} to SNS", event.getEventType(), event.getAggregatedID());
                 event.setPublished();
             } catch (Exception e) {
