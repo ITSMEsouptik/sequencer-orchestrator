@@ -41,3 +41,8 @@ crash.*.log
 crash.log
 *.tfvars
 *.tfvars.json
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
